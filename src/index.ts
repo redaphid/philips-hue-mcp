@@ -507,6 +507,201 @@ server.registerTool('turn_all_lights_on', {
   }
 });
 
+// ============================================
+// SETUP & AUTHENTICATION TOOLS
+// ============================================
+
+const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+
+// Resource: Setup instructions
+server.registerResource('setup-guide', 'hue://setup-guide', {
+  title: 'Philips Hue Setup Guide',
+  description: 'Instructions for setting up authentication with a Philips Hue bridge',
+  mimeType: 'text/markdown',
+}, async () => {
+  return {
+    contents: [{
+      uri: 'hue://setup-guide',
+      mimeType: 'text/markdown',
+      text: `# Philips Hue Bridge Setup Guide
+
+## Overview
+To control Philips Hue lights, you need two things:
+1. **Bridge IP Address** - The local IP of your Hue bridge
+2. **Username (Auth Token)** - A unique token that authorizes API access
+
+## Step 1: Discover Your Bridge
+
+Use the \`discover_bridges\` tool to find Hue bridges on your network.
+This will return a list of bridges with their IP addresses.
+
+Alternatively, check your router's admin panel for a device named "Philips-hue".
+
+## Step 2: Create an Auth Token
+
+**IMPORTANT: You must physically press the button on top of your Hue bridge before running this step!**
+
+1. Go to your Hue bridge (the square device connected to your router)
+2. Press the large button on top of the bridge
+3. Within 30 seconds, use the \`create_auth_token\` tool with your bridge IP
+4. Save the returned username - this is your auth token
+
+## Step 3: Configure the MCP Server
+
+Set these environment variables before starting the server:
+
+\`\`\`bash
+export HUE_BRIDGE_IP="<your-bridge-ip>"
+export HUE_USERNAME="<your-auth-token>"
+\`\`\`
+
+Or create a \`.env\` file:
+\`\`\`
+HUE_BRIDGE_IP=192.168.1.x
+HUE_USERNAME=your-token-here
+\`\`\`
+
+## Troubleshooting
+
+- **"link button not pressed"** - You need to press the physical button on the bridge first, then retry within 30 seconds
+- **Bridge not found** - Ensure the bridge is powered on and connected to your network
+- **Connection timeout** - Check that your computer is on the same network as the bridge
+
+## Security Notes
+
+- Keep your auth token secret - anyone with it can control your lights
+- The token doesn't expire, but you can delete it from the bridge using the Hue app
+- Each application should have its own token for easy revocation
+`,
+    }],
+  };
+});
+
+// Tool: Discover Hue bridges on the network
+server.registerTool('discover_bridges', {
+  title: 'Discover Bridges',
+  description: 'Discover Philips Hue bridges on your local network using the Hue discovery service',
+}, async () => {
+  try {
+    // Use Philips Hue discovery endpoint
+    const response = await axios.get('https://discovery.meethue.com/', { timeout: 10000 });
+    const bridges = response.data;
+
+    if (!bridges || bridges.length === 0) {
+      return {
+        content: [{
+          type: 'text',
+          text: 'No Hue bridges found on the network. Make sure your bridge is powered on and connected to the same network.',
+        }],
+      };
+    }
+
+    return {
+      content: [{
+        type: 'text',
+        text: `Found ${bridges.length} Hue bridge(s):\n\n${JSON.stringify(bridges, null, 2)}\n\nUse the bridge IP address with the create_auth_token tool to authenticate.`,
+      }],
+    };
+  } catch (error: any) {
+    return {
+      content: [{ type: 'text', text: `Error discovering bridges: ${error.message}` }],
+      isError: true,
+    };
+  }
+});
+
+// Tool: Create auth token (requires button press)
+server.registerTool('create_auth_token', {
+  title: 'Create Auth Token',
+  description: 'Create a new auth token for the Hue bridge. IMPORTANT: You must press the button on the Hue bridge first, then call this within 30 seconds!',
+  inputSchema: z.object({
+    bridgeIp: z.string().describe('The IP address of the Hue bridge'),
+    appName: z.string().optional().describe('Application name (default: phillips-hue-mcp)'),
+    deviceName: z.string().optional().describe('Device name (default: claude-agent)'),
+  }),
+}, async ({ bridgeIp, appName = 'phillips-hue-mcp', deviceName = 'claude-agent' }) => {
+  try {
+    const response = await axios.post(
+      `https://${bridgeIp}/api`,
+      { devicetype: `${appName}#${deviceName}` },
+      { httpsAgent, timeout: 10000 }
+    );
+
+    const result = response.data;
+
+    // Check for errors
+    if (Array.isArray(result) && result[0]?.error) {
+      const error = result[0].error;
+      if (error.type === 101) {
+        return {
+          content: [{
+            type: 'text',
+            text: `⚠️ Link button not pressed!\n\nPlease:\n1. Press the button on top of your Hue bridge\n2. Run this tool again within 30 seconds\n\nThe button is the large circular button on the top of the bridge.`,
+          }],
+        };
+      }
+      return {
+        content: [{ type: 'text', text: `Error from bridge: ${error.description}` }],
+        isError: true,
+      };
+    }
+
+    // Success - extract username
+    if (Array.isArray(result) && result[0]?.success?.username) {
+      const username = result[0].success.username;
+      return {
+        content: [{
+          type: 'text',
+          text: `✅ Auth token created successfully!\n\n**Your new auth token:** \`${username}\`\n\n**To use this token, set these environment variables:**\n\`\`\`bash\nexport HUE_BRIDGE_IP="${bridgeIp}"\nexport HUE_USERNAME="${username}"\n\`\`\`\n\n**Or add to your .mcp.json:**\n\`\`\`json\n{\n  "mcpServers": {\n    "phillips-hue": {\n      "type": "streamable-http",\n      "url": "http://localhost:3100/mcp",\n      "env": {\n        "HUE_BRIDGE_IP": "${bridgeIp}",\n        "HUE_USERNAME": "${username}"\n      }\n    }\n  }\n}\n\`\`\`\n\n⚠️ Keep this token secret! Anyone with it can control your lights.`,
+        }],
+      };
+    }
+
+    return {
+      content: [{ type: 'text', text: `Unexpected response from bridge: ${JSON.stringify(result)}` }],
+      isError: true,
+    };
+  } catch (error: any) {
+    return {
+      content: [{ type: 'text', text: `Error creating auth token: ${error.message}` }],
+      isError: true,
+    };
+  }
+});
+
+// Tool: Test connection
+server.registerTool('test_connection', {
+  title: 'Test Connection',
+  description: 'Test the connection to the Hue bridge with current credentials',
+}, async () => {
+  if (!HUE_BRIDGE_IP || !HUE_USERNAME) {
+    return {
+      content: [{
+        type: 'text',
+        text: `❌ Not configured!\n\nMissing environment variables:\n${!HUE_BRIDGE_IP ? '- HUE_BRIDGE_IP\n' : ''}${!HUE_USERNAME ? '- HUE_USERNAME\n' : ''}\nUse the discover_bridges and create_auth_token tools to set up authentication, or read the setup-guide resource for instructions.`,
+      }],
+    };
+  }
+
+  try {
+    const lights = await hueClient.getLights();
+    return {
+      content: [{
+        type: 'text',
+        text: `✅ Connection successful!\n\nBridge IP: ${HUE_BRIDGE_IP}\nFound ${lights.length} lights.\n\nYou're ready to control your Hue lights!`,
+      }],
+    };
+  } catch (error: any) {
+    return {
+      content: [{
+        type: 'text',
+        text: `❌ Connection failed!\n\nBridge IP: ${HUE_BRIDGE_IP}\nError: ${error.message}\n\nCheck that:\n1. The bridge IP is correct\n2. Your auth token is valid\n3. You're on the same network as the bridge`,
+      }],
+      isError: true,
+    };
+  }
+});
+
 // Store active transports by session ID
 const transports: Record<string, StreamableHTTPServerTransport> = {};
 
