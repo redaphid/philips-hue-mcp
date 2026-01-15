@@ -91,12 +91,12 @@ server.registerTool('set_light_brightness', {
 
 server.registerTool('set_light_color', {
   title: 'Set Light Color',
-  description: 'Set the color of a light using HSL (hue, saturation, lightness) coordinates. All values are 0-1.',
+  description: 'Set the color of a light using HSL coordinates. All values are decimals from 0 to 1.',
   inputSchema: z.object({
     lightId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_lights.'),
-    hue: z.coerce.number().min(0).max(1).describe('0=red, 0.33=green, 0.66=blue, 1=red'),
-    saturation: z.coerce.number().min(0).max(1).describe('0=white, 1=full color'),
-    lightness: z.coerce.number().min(0).max(1).describe('0=off, 1=full brightness'),
+    hue: z.coerce.number().min(0).max(1).describe('Decimal 0-1. Red=0, green=0.33, blue=0.66'),
+    saturation: z.coerce.number().min(0).max(1).describe('Decimal 0-1. White=0, full color=1'),
+    lightness: z.coerce.number().min(0).max(1).describe('Decimal 0-1. Off=0, full brightness=1'),
   }),
 }, async ({ lightId, hue, saturation, lightness }) => {
   if (!isConfigured()) return notConfigured();
@@ -119,15 +119,15 @@ server.registerTool('set_light_color_temp', {
 
 server.registerTool('set_light_state', {
   title: 'Set Light State',
-  description: 'Set multiple properties of a light at once. Color uses HSL coordinates (0-1).',
+  description: 'Set multiple properties of a light at once. HSL values are decimals from 0 to 1.',
   inputSchema: z.object({
     lightId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_lights.'),
     on: z.boolean().optional().describe('true=on, false=off'),
-    hue: z.coerce.number().min(0).max(1).optional().describe('0=red, 0.33=green, 0.66=blue'),
-    saturation: z.coerce.number().min(0).max(1).optional().describe('0=white, 1=full color'),
-    lightness: z.coerce.number().min(0).max(1).optional().describe('0=off, 1=full brightness'),
-    colorTemp: z.coerce.number().min(153).max(500).optional().describe('153=cool, 500=warm (mireds)'),
-    transitionTime: z.coerce.number().min(0).optional().describe('Transition in 100ms units (10=1sec)'),
+    hue: z.coerce.number().min(0).max(1).optional().describe('Decimal 0-1. Red=0, green=0.33, blue=0.66'),
+    saturation: z.coerce.number().min(0).max(1).optional().describe('Decimal 0-1. White=0, full color=1'),
+    lightness: z.coerce.number().min(0).max(1).optional().describe('Decimal 0-1. Off=0, full brightness=1'),
+    colorTemp: z.coerce.number().min(153).max(500).optional().describe('Integer 153-500. Cool=153, warm=500'),
+    transitionTime: z.coerce.number().min(0).optional().describe('Integer in 100ms units (10=1sec)'),
   }),
 }, async ({ lightId, on, hue, saturation, lightness, colorTemp, transitionTime }) => {
   if (!isConfigured()) return notConfigured();
@@ -204,12 +204,12 @@ server.registerTool('set_room_brightness', {
 
 server.registerTool('set_room_color', {
   title: 'Set Room Color',
-  description: 'Set the color of all lights in a room using HSL (hue, saturation, lightness) coordinates. All values are 0-1.',
+  description: 'Set the color of all lights in a room using HSL coordinates. All values are decimals from 0 to 1.',
   inputSchema: z.object({
     roomId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_rooms.'),
-    hue: z.coerce.number().min(0).max(1).describe('0=red, 0.33=green, 0.66=blue, 1=red'),
-    saturation: z.coerce.number().min(0).max(1).describe('0=white, 1=full color'),
-    lightness: z.coerce.number().min(0).max(1).describe('0=off, 1=full brightness'),
+    hue: z.coerce.number().min(0).max(1).describe('Decimal 0-1. Red=0, green=0.33, blue=0.66'),
+    saturation: z.coerce.number().min(0).max(1).describe('Decimal 0-1. White=0, full color=1'),
+    lightness: z.coerce.number().min(0).max(1).describe('Decimal 0-1. Off=0, full brightness=1'),
   }),
 }, async ({ roomId, hue, saturation, lightness }) => {
   if (!isConfigured()) return notConfigured();
@@ -232,15 +232,15 @@ server.registerTool('set_room_color_temp', {
 
 server.registerTool('set_room_state', {
   title: 'Set Room State',
-  description: 'Set multiple properties of all lights in a room. Color uses HSL coordinates (0-1).',
+  description: 'Set multiple properties of all lights in a room. HSL values are decimals from 0 to 1.',
   inputSchema: z.object({
     roomId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_rooms.'),
     on: z.boolean().optional().describe('true=on, false=off'),
-    hue: z.coerce.number().min(0).max(1).optional().describe('0=red, 0.33=green, 0.66=blue'),
-    saturation: z.coerce.number().min(0).max(1).optional().describe('0=white, 1=full color'),
-    lightness: z.coerce.number().min(0).max(1).optional().describe('0=off, 1=full brightness'),
-    colorTemp: z.coerce.number().min(153).max(500).optional().describe('153=cool, 500=warm (mireds)'),
-    transitionTime: z.coerce.number().min(0).optional().describe('Transition in 100ms units (10=1sec)'),
+    hue: z.coerce.number().min(0).max(1).optional().describe('Decimal 0-1. Red=0, green=0.33, blue=0.66'),
+    saturation: z.coerce.number().min(0).max(1).optional().describe('Decimal 0-1. White=0, full color=1'),
+    lightness: z.coerce.number().min(0).max(1).optional().describe('Decimal 0-1. Off=0, full brightness=1'),
+    colorTemp: z.coerce.number().min(153).max(500).optional().describe('Integer 153-500. Cool=153, warm=500'),
+    transitionTime: z.coerce.number().min(0).optional().describe('Integer in 100ms units (10=1sec)'),
   }),
 }, async ({ roomId, on, hue, saturation, lightness, colorTemp, transitionTime }) => {
   if (!isConfigured()) return notConfigured();
