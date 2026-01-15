@@ -13,6 +13,11 @@ const HUE_BRIDGE_IP = process.env.HUE_BRIDGE_IP || '';
 const HUE_USERNAME = process.env.HUE_USERNAME || '';
 const PORT = parseInt(process.env.PORT || '3100', 10);
 
+// Convert HSL (0-1) to native Hue format
+const toHue = (v?: number) => v != null ? Math.round(v * 65535) : undefined;
+const toSat = (v?: number) => v != null ? Math.round(v * 254) : undefined;
+const toBri = (v?: number) => v != null ? Math.round(v * 253) + 1 : undefined;
+
 const hueClient = new HueClient(HUE_BRIDGE_IP, HUE_USERNAME);
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
@@ -34,7 +39,7 @@ const isConfigured = () => HUE_BRIDGE_IP && HUE_USERNAME;
 
 server.registerTool('list_lights', {
   title: 'List Lights',
-  description: 'Get a list of all Philips Hue lights with their current state',
+  description: 'Get a list of all Philips Hue lights with their current state. Call this first to get light IDs before controlling lights.',
 }, async () => {
   if (!isConfigured()) return notConfigured();
   try { return json(await hueClient.getLights()); }
@@ -44,7 +49,7 @@ server.registerTool('list_lights', {
 server.registerTool('get_light', {
   title: 'Get Light',
   description: 'Get details of a specific light by its ID',
-  inputSchema: z.object({ lightId: z.string().describe('The ID of the light to get') }),
+  inputSchema: z.object({ lightId: z.string().describe('Numeric ID of the light (e.g. "1", "2"). Get IDs from list_lights.') }),
 }, async ({ lightId }) => {
   if (!isConfigured()) return notConfigured();
   try { return json(await hueClient.getLight(lightId)); }
@@ -54,7 +59,7 @@ server.registerTool('get_light', {
 server.registerTool('turn_light_on', {
   title: 'Turn Light On',
   description: 'Turn on a specific light',
-  inputSchema: z.object({ lightId: z.string().describe('The ID of the light to turn on') }),
+  inputSchema: z.object({ lightId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_lights.') }),
 }, async ({ lightId }) => {
   if (!isConfigured()) return notConfigured();
   try { await hueClient.turnLightOn(lightId); return ok(`Light ${lightId} turned on`); }
@@ -64,7 +69,7 @@ server.registerTool('turn_light_on', {
 server.registerTool('turn_light_off', {
   title: 'Turn Light Off',
   description: 'Turn off a specific light',
-  inputSchema: z.object({ lightId: z.string().describe('The ID of the light to turn off') }),
+  inputSchema: z.object({ lightId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_lights.') }),
 }, async ({ lightId }) => {
   if (!isConfigured()) return notConfigured();
   try { await hueClient.turnLightOff(lightId); return ok(`Light ${lightId} turned off`); }
@@ -75,7 +80,7 @@ server.registerTool('set_light_brightness', {
   title: 'Set Light Brightness',
   description: 'Set the brightness of a specific light (1-254)',
   inputSchema: z.object({
-    lightId: z.string().describe('The ID of the light'),
+    lightId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_lights.'),
     brightness: z.coerce.number().min(1).max(254).describe('Brightness value (1-254)'),
   }),
 }, async ({ lightId, brightness }) => {
@@ -86,24 +91,25 @@ server.registerTool('set_light_brightness', {
 
 server.registerTool('set_light_color', {
   title: 'Set Light Color',
-  description: 'Set the color of a specific light using hue (0-65535) and saturation (0-254)',
+  description: 'Set the color of a light using HSL (hue, saturation, lightness) coordinates. All values are 0-1.',
   inputSchema: z.object({
-    lightId: z.string().describe('The ID of the light'),
-    hue: z.coerce.number().min(0).max(65535).describe('Hue value (0-65535, where 0/65535=red, ~21845=green, ~43690=blue)'),
-    saturation: z.coerce.number().min(0).max(254).describe('Saturation value (0-254, 0=white, 254=full color)'),
+    lightId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_lights.'),
+    hue: z.coerce.number().min(0).max(1).describe('0=red, 0.33=green, 0.66=blue, 1=red'),
+    saturation: z.coerce.number().min(0).max(1).describe('0=white, 1=full color'),
+    lightness: z.coerce.number().min(0).max(1).describe('0=off, 1=full brightness'),
   }),
-}, async ({ lightId, hue, saturation }) => {
+}, async ({ lightId, hue, saturation, lightness }) => {
   if (!isConfigured()) return notConfigured();
-  try { await hueClient.setColor(lightId, hue, saturation); return ok(`Light ${lightId} color set to hue=${hue}, saturation=${saturation}`); }
+  try { await hueClient.setColor(lightId, hue, saturation, lightness); return ok(`Light ${lightId} color set`); }
   catch (e) { return err(e); }
 });
 
 server.registerTool('set_light_color_temp', {
   title: 'Set Light Color Temperature',
-  description: 'Set the color temperature of a specific light in mireds (153-500, lower=cooler/bluer, higher=warmer/yellower)',
+  description: 'Set the color temperature of a specific light (153=cool daylight, 500=warm candlelight)',
   inputSchema: z.object({
-    lightId: z.string().describe('The ID of the light'),
-    colorTemp: z.coerce.number().min(153).max(500).describe('Color temperature in mireds (153=cool daylight, 500=warm candlelight)'),
+    lightId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_lights.'),
+    colorTemp: z.coerce.number().min(153).max(500).describe('Color temperature in mireds: 153=cool, 500=warm'),
   }),
 }, async ({ lightId, colorTemp }) => {
   if (!isConfigured()) return notConfigured();
@@ -113,20 +119,20 @@ server.registerTool('set_light_color_temp', {
 
 server.registerTool('set_light_state', {
   title: 'Set Light State',
-  description: 'Set multiple properties of a light at once',
+  description: 'Set multiple properties of a light at once. Color uses HSL coordinates (0-1).',
   inputSchema: z.object({
-    lightId: z.string().describe('The ID of the light'),
-    on: z.boolean().optional().describe('Turn light on or off'),
-    brightness: z.coerce.number().min(1).max(254).optional().describe('Brightness (1-254)'),
-    hue: z.coerce.number().min(0).max(65535).optional().describe('Hue (0-65535)'),
-    saturation: z.coerce.number().min(0).max(254).optional().describe('Saturation (0-254)'),
-    colorTemp: z.coerce.number().min(153).max(500).optional().describe('Color temperature in mireds'),
-    transitionTime: z.coerce.number().min(0).optional().describe('Transition time in 100ms increments (e.g., 10 = 1 second)'),
+    lightId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_lights.'),
+    on: z.boolean().optional().describe('true=on, false=off'),
+    hue: z.coerce.number().min(0).max(1).optional().describe('0=red, 0.33=green, 0.66=blue'),
+    saturation: z.coerce.number().min(0).max(1).optional().describe('0=white, 1=full color'),
+    lightness: z.coerce.number().min(0).max(1).optional().describe('0=off, 1=full brightness'),
+    colorTemp: z.coerce.number().min(153).max(500).optional().describe('153=cool, 500=warm (mireds)'),
+    transitionTime: z.coerce.number().min(0).optional().describe('Transition in 100ms units (10=1sec)'),
   }),
-}, async ({ lightId, on, brightness, hue, saturation, colorTemp, transitionTime }) => {
+}, async ({ lightId, on, hue, saturation, lightness, colorTemp, transitionTime }) => {
   if (!isConfigured()) return notConfigured();
   try {
-    await hueClient.setLightState(lightId, { on, bri: brightness, hue, sat: saturation, ct: colorTemp, transitiontime: transitionTime });
+    await hueClient.setLightState(lightId, { on, bri: toBri(lightness), hue: toHue(hue), sat: toSat(saturation), ct: colorTemp, transitiontime: transitionTime });
     return ok(`Light ${lightId} state updated`);
   } catch (e) { return err(e); }
 });
@@ -137,7 +143,7 @@ server.registerTool('set_light_state', {
 
 server.registerTool('list_rooms', {
   title: 'List Rooms',
-  description: 'Get a list of all rooms and zones',
+  description: 'Get a list of all rooms and zones. Call this first to get room IDs before controlling rooms.',
 }, async () => {
   if (!isConfigured()) return notConfigured();
   try { return json(await hueClient.getRooms()); }
@@ -146,7 +152,7 @@ server.registerTool('list_rooms', {
 
 server.registerTool('list_groups', {
   title: 'List All Groups',
-  description: 'Get a list of all groups including rooms, zones, and entertainment areas',
+  description: 'Get a list of all groups including rooms, zones, and entertainment areas.',
 }, async () => {
   if (!isConfigured()) return notConfigured();
   try { return json(await hueClient.getAllGroups()); }
@@ -156,7 +162,7 @@ server.registerTool('list_groups', {
 server.registerTool('get_room', {
   title: 'Get Room',
   description: 'Get details of a specific room by its ID',
-  inputSchema: z.object({ roomId: z.string().describe('The ID of the room') }),
+  inputSchema: z.object({ roomId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_rooms.') }),
 }, async ({ roomId }) => {
   if (!isConfigured()) return notConfigured();
   try { return json(await hueClient.getRoom(roomId)); }
@@ -166,7 +172,7 @@ server.registerTool('get_room', {
 server.registerTool('turn_room_on', {
   title: 'Turn Room On',
   description: 'Turn on all lights in a room',
-  inputSchema: z.object({ roomId: z.string().describe('The ID of the room') }),
+  inputSchema: z.object({ roomId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_rooms.') }),
 }, async ({ roomId }) => {
   if (!isConfigured()) return notConfigured();
   try { await hueClient.turnRoomOn(roomId); return ok(`Room ${roomId} turned on`); }
@@ -176,7 +182,7 @@ server.registerTool('turn_room_on', {
 server.registerTool('turn_room_off', {
   title: 'Turn Room Off',
   description: 'Turn off all lights in a room',
-  inputSchema: z.object({ roomId: z.string().describe('The ID of the room') }),
+  inputSchema: z.object({ roomId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_rooms.') }),
 }, async ({ roomId }) => {
   if (!isConfigured()) return notConfigured();
   try { await hueClient.turnRoomOff(roomId); return ok(`Room ${roomId} turned off`); }
@@ -187,7 +193,7 @@ server.registerTool('set_room_brightness', {
   title: 'Set Room Brightness',
   description: 'Set the brightness of all lights in a room (1-254)',
   inputSchema: z.object({
-    roomId: z.string().describe('The ID of the room'),
+    roomId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_rooms.'),
     brightness: z.coerce.number().min(1).max(254).describe('Brightness value (1-254)'),
   }),
 }, async ({ roomId, brightness }) => {
@@ -198,24 +204,25 @@ server.registerTool('set_room_brightness', {
 
 server.registerTool('set_room_color', {
   title: 'Set Room Color',
-  description: 'Set the color of all lights in a room using hue and saturation',
+  description: 'Set the color of all lights in a room using HSL (hue, saturation, lightness) coordinates. All values are 0-1.',
   inputSchema: z.object({
-    roomId: z.string().describe('The ID of the room'),
-    hue: z.coerce.number().min(0).max(65535).describe('Hue value (0-65535)'),
-    saturation: z.coerce.number().min(0).max(254).describe('Saturation value (0-254)'),
+    roomId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_rooms.'),
+    hue: z.coerce.number().min(0).max(1).describe('0=red, 0.33=green, 0.66=blue, 1=red'),
+    saturation: z.coerce.number().min(0).max(1).describe('0=white, 1=full color'),
+    lightness: z.coerce.number().min(0).max(1).describe('0=off, 1=full brightness'),
   }),
-}, async ({ roomId, hue, saturation }) => {
+}, async ({ roomId, hue, saturation, lightness }) => {
   if (!isConfigured()) return notConfigured();
-  try { await hueClient.setRoomColor(roomId, hue, saturation); return ok(`Room ${roomId} color set to hue=${hue}, saturation=${saturation}`); }
+  try { await hueClient.setRoomColor(roomId, hue, saturation, lightness); return ok(`Room ${roomId} color set`); }
   catch (e) { return err(e); }
 });
 
 server.registerTool('set_room_color_temp', {
   title: 'Set Room Color Temperature',
-  description: 'Set the color temperature of all lights in a room in mireds',
+  description: 'Set the color temperature of all lights in a room (153=cool daylight, 500=warm candlelight)',
   inputSchema: z.object({
-    roomId: z.string().describe('The ID of the room'),
-    colorTemp: z.coerce.number().min(153).max(500).describe('Color temperature in mireds (153-500)'),
+    roomId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_rooms.'),
+    colorTemp: z.coerce.number().min(153).max(500).describe('153=cool, 500=warm (mireds)'),
   }),
 }, async ({ roomId, colorTemp }) => {
   if (!isConfigured()) return notConfigured();
@@ -225,20 +232,20 @@ server.registerTool('set_room_color_temp', {
 
 server.registerTool('set_room_state', {
   title: 'Set Room State',
-  description: 'Set multiple properties of all lights in a room at once',
+  description: 'Set multiple properties of all lights in a room. Color uses HSL coordinates (0-1).',
   inputSchema: z.object({
-    roomId: z.string().describe('The ID of the room'),
-    on: z.boolean().optional().describe('Turn lights on or off'),
-    brightness: z.coerce.number().min(1).max(254).optional().describe('Brightness (1-254)'),
-    hue: z.coerce.number().min(0).max(65535).optional().describe('Hue (0-65535)'),
-    saturation: z.coerce.number().min(0).max(254).optional().describe('Saturation (0-254)'),
-    colorTemp: z.coerce.number().min(153).max(500).optional().describe('Color temperature in mireds'),
-    transitionTime: z.coerce.number().min(0).optional().describe('Transition time in 100ms increments'),
+    roomId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_rooms.'),
+    on: z.boolean().optional().describe('true=on, false=off'),
+    hue: z.coerce.number().min(0).max(1).optional().describe('0=red, 0.33=green, 0.66=blue'),
+    saturation: z.coerce.number().min(0).max(1).optional().describe('0=white, 1=full color'),
+    lightness: z.coerce.number().min(0).max(1).optional().describe('0=off, 1=full brightness'),
+    colorTemp: z.coerce.number().min(153).max(500).optional().describe('153=cool, 500=warm (mireds)'),
+    transitionTime: z.coerce.number().min(0).optional().describe('Transition in 100ms units (10=1sec)'),
   }),
-}, async ({ roomId, on, brightness, hue, saturation, colorTemp, transitionTime }) => {
+}, async ({ roomId, on, hue, saturation, lightness, colorTemp, transitionTime }) => {
   if (!isConfigured()) return notConfigured();
   try {
-    await hueClient.setRoomState(roomId, { on, bri: brightness, hue, sat: saturation, ct: colorTemp, transitiontime: transitionTime });
+    await hueClient.setRoomState(roomId, { on, bri: toBri(lightness), hue: toHue(hue), sat: toSat(saturation), ct: colorTemp, transitiontime: transitionTime });
     return ok(`Room ${roomId} state updated`);
   } catch (e) { return err(e); }
 });
@@ -249,7 +256,7 @@ server.registerTool('set_room_state', {
 
 server.registerTool('list_scenes', {
   title: 'List Scenes',
-  description: 'Get a list of all available scenes',
+  description: 'Get a list of all available scenes. Call this first to get scene IDs before activating scenes.',
 }, async () => {
   if (!isConfigured()) return notConfigured();
   try { return json(await hueClient.getScenes()); }
@@ -260,8 +267,8 @@ server.registerTool('activate_scene', {
   title: 'Activate Scene',
   description: 'Activate a specific scene',
   inputSchema: z.object({
-    sceneId: z.string().describe('The ID of the scene to activate'),
-    groupId: z.string().optional().describe('Optional group ID to apply the scene to'),
+    sceneId: z.string().describe('Scene ID (alphanumeric string). Get IDs from list_scenes.'),
+    groupId: z.string().optional().describe('Optional group ID to apply scene to. Get IDs from list_groups.'),
   }),
 }, async ({ sceneId, groupId }) => {
   if (!isConfigured()) return notConfigured();
