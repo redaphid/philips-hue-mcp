@@ -23,6 +23,7 @@ const toSat = (v?: number) => v != null ? Math.round(v * 254) : undefined;
 const toBri = (v?: number) => v != null ? Math.round(v * 253) + 1 : undefined;
 
 // Parse any CSS color string and convert to Hue bridge native format
+// Alpha channel controls brightness: rgba(255,0,0,0.5) = red at 50% brightness
 function parseColor(color: string): { hue: number; sat: number; bri: number } | null {
   const c = colord(color);
   if (!c.isValid()) return null;
@@ -30,7 +31,7 @@ function parseColor(color: string): { hue: number; sat: number; bri: number } | 
   return {
     hue: Math.round((hsl.h / 360) * 65535),
     sat: Math.round((hsl.s / 100) * 254),
-    bri: Math.max(1, Math.round((hsl.l / 100) * 254)),
+    bri: Math.max(1, Math.round(c.alpha() * 254)),
   };
 }
 
@@ -121,10 +122,10 @@ server.registerTool('set_light_brightness', {
 
 server.registerTool('set_light_color', {
   title: 'Set Light Color',
-  description: 'Changes the color of ONE specific light. Use set_all_lights_color instead if you want to change ALL lights. Accepts any CSS color format. Returns success message or error.',
+  description: 'Changes the color of ONE specific light. Use set_all_lights_color instead if you want to change ALL lights. Accepts any CSS color format. Alpha controls brightness.',
   inputSchema: z.object({
     lightId: z.string().describe('Required. The light ID as a string like "1" or "2". Get valid IDs by calling list_lights first.'),
-    color: z.string().describe('Required. Any CSS color: name (red, blue, cyan, coral, tomato), hex (#ff0000, #f00), rgb (rgb(255,0,0)), or hsl (hsl(0,100%,50%)). Examples: "red", "#00ff00", "rgb(0,0,255)", "hsl(180,100%,50%)"'),
+    color: z.string().describe('CSS color with optional alpha for brightness. Examples: "red", "#ff0000", "rgba(255,0,0,0.5)" for red at 50% brightness'),
   }),
 }, async ({ lightId, color }) => {
   if (!isConfigured()) return notConfigured();
@@ -237,10 +238,10 @@ server.registerTool('set_room_brightness', {
 
 server.registerTool('set_room_color', {
   title: 'Set Room Color',
-  description: 'Set the color of ALL lights in a room. Accepts any CSS color format. Returns success message or error.',
+  description: 'Set the color of ALL lights in a room. Accepts any CSS color format. Alpha controls brightness.',
   inputSchema: z.object({
     roomId: z.string().describe('Required. The room ID as a string like "1" or "2". Get valid IDs by calling list_rooms first.'),
-    color: z.string().describe('Required. Any CSS color: name (red, blue, cyan, coral, tomato), hex (#ff0000, #f00), rgb (rgb(255,0,0)), or hsl (hsl(0,100%,50%)). Examples: "red", "#00ff00", "rgb(0,0,255)", "hsl(180,100%,50%)"'),
+    color: z.string().describe('CSS color with optional alpha for brightness. Examples: "red", "#ff0000", "rgba(255,0,0,0.5)" for red at 50% brightness'),
   }),
 }, async ({ roomId, color }) => {
   if (!isConfigured()) return notConfigured();
@@ -335,9 +336,9 @@ server.registerTool('turn_all_lights_on', {
 
 server.registerTool('set_all_lights_color', {
   title: 'Set All Lights Color',
-  description: 'Set the color of ALL lights in the house at once. Accepts any CSS color format. This is the easiest way to change all lights to a color.',
+  description: 'Set the color of ALL lights in the house at once. Accepts any CSS color format. Alpha controls brightness.',
   inputSchema: z.object({
-    color: z.string().describe('Required. Any CSS color: name (red, blue, cyan, coral, tomato), hex (#ff0000, #f00), rgb (rgb(255,0,0)), or hsl (hsl(0,100%,50%)). Examples: "red", "#00ff00", "rgb(0,0,255)", "hsl(180,100%,50%)"'),
+    color: z.string().describe('CSS color with optional alpha for brightness. Examples: "red", "#ff0000", "rgba(255,0,0,0.5)" for red at 50% brightness'),
   }),
 }, async ({ color }) => {
   if (!isConfigured()) return notConfigured();
