@@ -5,9 +5,11 @@ import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { HueClient } from './hue-client.js';
 import { randomUUID } from 'node:crypto';
+import axios from 'axios';
+import https from 'node:https';
 
-const HUE_BRIDGE_IP = process.env.HUE_BRIDGE_IP || '10.0.2.3';
-const HUE_USERNAME = process.env.HUE_USERNAME || 'siZ0XL9p7-cSbJchW6gV6Ze587hpBo4-xC2Vx8Wg';
+const HUE_BRIDGE_IP = process.env.HUE_BRIDGE_IP || '';
+const HUE_USERNAME = process.env.HUE_USERNAME || '';
 const PORT = parseInt(process.env.PORT || '3100', 10);
 
 const hueClient = new HueClient(HUE_BRIDGE_IP, HUE_USERNAME);
