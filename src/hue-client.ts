@@ -44,7 +44,7 @@ export class HueClient {
 
   private async request(method: string, path: string, body?: object): Promise<any> {
     const attempt = () => new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => { req.destroy(); reject(new Error('timeout')); }, 10000);
+      const timeout = setTimeout(() => { req.destroy(); reject(new Error('timeout')); }, 100);
       const req = https.request({
         hostname: this.bridgeIp,
         path: this.baseUrl + path,
