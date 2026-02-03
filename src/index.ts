@@ -5,7 +5,12 @@ import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { HueClient } from './hue-client.js';
+import { createOpenApiRouter, getOpenApiSpec, getSwaggerHtml } from './openapi.js';
 import { randomUUID } from 'node:crypto';
+import express from 'express';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const swaggerUiPath = require('swagger-ui-dist/absolute-path.js');
 import https from 'node:https';
 import { colord, extend } from 'colord';
 import names from 'colord/plugins/names';
@@ -543,8 +548,15 @@ async function main() {
     await transports[sessionId].handleRequest(req, res);
   });
 
+  // REST API routes
+  app.use('/api', createOpenApiRouter(hueClient, () => !!isConfigured()));
+  app.get('/openapi.json', (_req, res) => { res.json(getOpenApiSpec(PORT)); });
+  app.use('/swagger', express.static(swaggerUiPath()));
+  app.get('/docs', (_req, res) => { res.type('html').send(getSwaggerHtml()); });
+
   app.listen(PORT, () => {
     console.log(`Philips Hue MCP server running on http://0.0.0.0:${PORT}/mcp`);
+    console.log(`REST API docs available at http://0.0.0.0:${PORT}/docs`);
   });
 }
 
