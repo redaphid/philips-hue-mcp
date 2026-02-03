@@ -37,6 +37,9 @@ function parseColor(color: string): { hue: number; sat: number; bri: number } | 
 
 const hueClient = new HueClient(HUE_BRIDGE_IP, HUE_USERNAME);
 
+// Accept both string and number IDs, always coerce to string
+const idParam = (description: string) => z.union([z.string(), z.number()]).transform(v => String(v)).describe(description);
+
 // Simple https helper
 const httpsRequest = (url: string, options: https.RequestOptions = {}, body?: string): Promise<any> =>
   new Promise((resolve, reject) => {
@@ -79,7 +82,7 @@ server.registerTool('list_lights', {
 server.registerTool('get_light', {
   title: 'Get Light',
   description: 'Get details of a specific light by its ID',
-  inputSchema: z.object({ lightId: z.string().describe('Numeric ID of the light (e.g. "1", "2"). Get IDs from list_lights.') }),
+  inputSchema: z.object({ lightId: idParam('Numeric ID of the light (e.g. "1", "2"). Get IDs from list_lights.') }),
 }, async ({ lightId }) => {
   if (!isConfigured()) return notConfigured();
   try { return json(await hueClient.getLight(lightId)); }
@@ -89,7 +92,7 @@ server.registerTool('get_light', {
 server.registerTool('turn_light_on', {
   title: 'Turn Light On',
   description: 'Turn on a specific light',
-  inputSchema: z.object({ lightId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_lights.') }),
+  inputSchema: z.object({ lightId: idParam('Numeric ID (e.g. "1", "2"). Get IDs from list_lights.') }),
 }, async ({ lightId }) => {
   if (!isConfigured()) return notConfigured();
   try { await hueClient.turnLightOn(lightId); return ok(`Light ${lightId} turned on`); }
@@ -99,7 +102,7 @@ server.registerTool('turn_light_on', {
 server.registerTool('turn_light_off', {
   title: 'Turn Light Off',
   description: 'Turn off a specific light',
-  inputSchema: z.object({ lightId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_lights.') }),
+  inputSchema: z.object({ lightId: idParam('Numeric ID (e.g. "1", "2"). Get IDs from list_lights.') }),
 }, async ({ lightId }) => {
   if (!isConfigured()) return notConfigured();
   try { await hueClient.turnLightOff(lightId); return ok(`Light ${lightId} turned off`); }
@@ -117,7 +120,7 @@ Brightness is a value from 0 to 1, where 0 is minimum brightness and 1 is maximu
 <example>Set light 3 to dim (25%): lightId="3", brightness=0.25</example>
 <example>Set light 1 to very dim (10%): lightId="1", brightness=0.1</example>`,
   inputSchema: z.object({
-    lightId: z.string().describe('Required. The numeric light ID as a string. Get IDs by calling list_lights first. <example>"1"</example> <example>"2"</example> <example>"13"</example>'),
+    lightId: idParam('Required. The numeric light ID as a string. Get IDs by calling list_lights first. <example>"1"</example> <example>"2"</example> <example>"13"</example>'),
     brightness: z.coerce.number().min(0).max(1).describe('Required. Brightness from 0 to 1. <example>1</example> <example>0.5</example> <example>0.25</example> <example>0.1</example>'),
   }),
 }, async ({ lightId, brightness }) => {
@@ -140,7 +143,7 @@ Accepts any CSS color format. The alpha channel (0-1) controls brightness - use 
 <example>Set light 1 to warm orange: lightId="1", color="rgb(255,165,0)"</example>
 <example>Set light 2 to cyan at 75% brightness: lightId="2", color="hsla(180,100%,50%,0.75)"</example>`,
   inputSchema: z.object({
-    lightId: z.string().describe('Required. The numeric light ID as a string. Get IDs by calling list_lights first. <example>"1"</example> <example>"2"</example> <example>"13"</example>'),
+    lightId: idParam('Required. The numeric light ID as a string. Get IDs by calling list_lights first. <example>"1"</example> <example>"2"</example> <example>"13"</example>'),
     color: z.string().describe('Required. Any CSS color. Use alpha (0-1) to control brightness. <example>"red"</example> <example>"#ff0000"</example> <example>"rgb(255,0,0)"</example> <example>"rgba(255,0,0,0.5)"</example> <example>"hsl(0,100%,50%)"</example> <example>"hsla(240,100%,50%,0.75)"</example>'),
   }),
 }, async ({ lightId, color }) => {
@@ -157,7 +160,7 @@ server.registerTool('set_light_color_temp', {
   title: 'Set Light Color Temperature',
   description: 'Set the color temperature of a specific light (153=cool daylight, 500=warm candlelight)',
   inputSchema: z.object({
-    lightId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_lights.'),
+    lightId: idParam('Numeric ID (e.g. "1", "2"). Get IDs from list_lights.'),
     colorTemp: z.coerce.number().min(153).max(500).describe('Color temperature in mireds: 153=cool, 500=warm'),
   }),
 }, async ({ lightId, colorTemp }) => {
@@ -170,7 +173,7 @@ server.registerTool('set_light_state', {
   title: 'Set Light State',
   description: 'Set multiple properties of a light at once. Use this for advanced control with transitions.',
   inputSchema: z.object({
-    lightId: z.string().describe('Required. Light ID like "1" or "2". Get IDs from list_lights.'),
+    lightId: idParam('Required. Light ID like "1" or "2". Get IDs from list_lights.'),
     on: z.boolean().optional().describe('Optional. true=on, false=off'),
     color: z.string().optional().describe('Optional. Any CSS color: "red", "#ff0000", "rgb(255,0,0)", "hsl(0,100%,50%)"'),
     colorTemp: z.coerce.number().min(153).max(500).optional().describe('Optional. Color temperature 153-500. Cool=153, warm=500'),
@@ -211,7 +214,7 @@ server.registerTool('list_groups', {
 server.registerTool('get_room', {
   title: 'Get Room',
   description: 'Get details of a specific room by its ID',
-  inputSchema: z.object({ roomId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_rooms.') }),
+  inputSchema: z.object({ roomId: idParam('Numeric ID (e.g. "1", "2"). Get IDs from list_rooms.') }),
 }, async ({ roomId }) => {
   if (!isConfigured()) return notConfigured();
   try { return json(await hueClient.getRoom(roomId)); }
@@ -221,7 +224,7 @@ server.registerTool('get_room', {
 server.registerTool('turn_room_on', {
   title: 'Turn Room On',
   description: 'Turn on all lights in a room',
-  inputSchema: z.object({ roomId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_rooms.') }),
+  inputSchema: z.object({ roomId: idParam('Numeric ID (e.g. "1", "2"). Get IDs from list_rooms.') }),
 }, async ({ roomId }) => {
   if (!isConfigured()) return notConfigured();
   try { await hueClient.turnRoomOn(roomId); return ok(`Room ${roomId} turned on`); }
@@ -231,7 +234,7 @@ server.registerTool('turn_room_on', {
 server.registerTool('turn_room_off', {
   title: 'Turn Room Off',
   description: 'Turn off all lights in a room',
-  inputSchema: z.object({ roomId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_rooms.') }),
+  inputSchema: z.object({ roomId: idParam('Numeric ID (e.g. "1", "2"). Get IDs from list_rooms.') }),
 }, async ({ roomId }) => {
   if (!isConfigured()) return notConfigured();
   try { await hueClient.turnRoomOff(roomId); return ok(`Room ${roomId} turned off`); }
@@ -249,7 +252,7 @@ Brightness is a value from 0 to 1, where 0 is minimum brightness and 1 is maximu
 <example>Set office to dim (25%): roomId="3", brightness=0.25</example>
 <example>Set kitchen to very dim (10%): roomId="4", brightness=0.1</example>`,
   inputSchema: z.object({
-    roomId: z.string().describe('Required. The numeric room ID as a string. Get IDs by calling list_rooms first. <example>"1"</example> <example>"2"</example>'),
+    roomId: idParam('Required. The numeric room ID as a string. Get IDs by calling list_rooms first. <example>"1"</example> <example>"2"</example>'),
     brightness: z.coerce.number().min(0).max(1).describe('Required. Brightness from 0 to 1. <example>1</example> <example>0.5</example> <example>0.25</example> <example>0.1</example>'),
   }),
 }, async ({ roomId, brightness }) => {
@@ -270,7 +273,7 @@ Accepts any CSS color format. The alpha channel (0-1) controls brightness - use 
 <example>Set office to warm white: roomId="3", color="rgb(255,244,229)"</example>
 <example>Set kitchen to green at 75% brightness: roomId="4", color="hsla(120,100%,50%,0.75)"</example>`,
   inputSchema: z.object({
-    roomId: z.string().describe('Required. The numeric room ID as a string. Get IDs by calling list_rooms first. <example>"1"</example> <example>"2"</example>'),
+    roomId: idParam('Required. The numeric room ID as a string. Get IDs by calling list_rooms first. <example>"1"</example> <example>"2"</example>'),
     color: z.string().describe('Required. Any CSS color. Use alpha (0-1) to control brightness. <example>"red"</example> <example>"#ff0000"</example> <example>"rgba(255,0,0,0.5)"</example> <example>"hsla(240,100%,50%,0.75)"</example>'),
   }),
 }, async ({ roomId, color }) => {
@@ -287,7 +290,7 @@ server.registerTool('set_room_color_temp', {
   title: 'Set Room Color Temperature',
   description: 'Set the color temperature of all lights in a room (153=cool daylight, 500=warm candlelight)',
   inputSchema: z.object({
-    roomId: z.string().describe('Numeric ID (e.g. "1", "2"). Get IDs from list_rooms.'),
+    roomId: idParam('Numeric ID (e.g. "1", "2"). Get IDs from list_rooms.'),
     colorTemp: z.coerce.number().min(153).max(500).describe('153=cool, 500=warm (mireds)'),
   }),
 }, async ({ roomId, colorTemp }) => {
@@ -300,7 +303,7 @@ server.registerTool('set_room_state', {
   title: 'Set Room State',
   description: 'Set multiple properties of all lights in a room at once. Use this for advanced control with transitions.',
   inputSchema: z.object({
-    roomId: z.string().describe('Required. Room ID like "1" or "2". Get IDs from list_rooms.'),
+    roomId: idParam('Required. Room ID like "1" or "2". Get IDs from list_rooms.'),
     on: z.boolean().optional().describe('Optional. true=on, false=off'),
     color: z.string().optional().describe('Optional. Any CSS color: "red", "#ff0000", "rgb(255,0,0)", "hsl(0,100%,50%)"'),
     colorTemp: z.coerce.number().min(153).max(500).optional().describe('Optional. Color temperature 153-500. Cool=153, warm=500'),
@@ -333,8 +336,8 @@ server.registerTool('activate_scene', {
   title: 'Activate Scene',
   description: 'Activate a specific scene',
   inputSchema: z.object({
-    sceneId: z.string().describe('Scene ID (alphanumeric string). Get IDs from list_scenes.'),
-    groupId: z.string().optional().describe('Optional group ID to apply scene to. Get IDs from list_groups.'),
+    sceneId: idParam('Scene ID (alphanumeric string). Get IDs from list_scenes.'),
+    groupId: z.union([z.string(), z.number()]).transform(v => String(v)).optional().describe('Optional group ID to apply scene to. Get IDs from list_groups.'),
   }),
 }, async ({ sceneId, groupId }) => {
   if (!isConfigured()) return notConfigured();
@@ -346,7 +349,7 @@ server.registerTool('delete_scene', {
   title: 'Delete Scene',
   description: 'Permanently delete a scene from the Hue bridge. This action cannot be undone.',
   inputSchema: z.object({
-    sceneId: z.string().describe('Scene ID to delete. Get IDs from list_scenes.'),
+    sceneId: idParam('Scene ID to delete. Get IDs from list_scenes.'),
   }),
 }, async ({ sceneId }) => {
   if (!isConfigured()) return notConfigured();
@@ -367,8 +370,8 @@ The scene saves the current color, brightness, and on/off state of the lights. Y
 <example>Create scene from room 2: name="Dinner Party", roomId="2"</example>`,
   inputSchema: z.object({
     name: z.string().describe('Required. Name for the scene. <example>"Movie Night"</example> <example>"Reading"</example> <example>"Party Mode"</example>'),
-    roomId: z.string().optional().describe('Create scene from all lights in this room. Get IDs from list_rooms. <example>"1"</example> <example>"2"</example>'),
-    lightIds: z.array(z.string()).optional().describe('Create scene from specific lights. Get IDs from list_lights. <example>["1", "2", "3"]</example>'),
+    roomId: z.union([z.string(), z.number()]).transform(v => String(v)).optional().describe('Create scene from all lights in this room. Get IDs from list_rooms. <example>"1"</example> <example>"2"</example>'),
+    lightIds: z.array(z.union([z.string(), z.number()]).transform(v => String(v))).optional().describe('Create scene from specific lights. Get IDs from list_lights. <example>["1", "2", "3"]</example>'),
   }),
 }, async ({ name, roomId, lightIds }) => {
   if (!isConfigured()) return notConfigured();
