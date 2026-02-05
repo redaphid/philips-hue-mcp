@@ -42,9 +42,13 @@ export class HueClient {
   private agent: https.Agent;
   private bridgeIp: string;
 
+  private static QUEUE_TTL = 5000;
+
   private async request(method: string, path: string, body?: object): Promise<any> {
+    const enqueuedAt = Date.now();
+
     const attempt = () => new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => { req.destroy(); reject(new Error('timeout')); }, 100);
+      const timeout = setTimeout(() => { req.destroy(); reject(new Error('timeout')); }, 3000);
       const req = https.request({
         hostname: this.bridgeIp,
         path: this.baseUrl + path,
@@ -62,6 +66,9 @@ export class HueClient {
     });
 
     const fn = async () => {
+      if (Date.now() - enqueuedAt > HueClient.QUEUE_TTL) {
+        throw new Error('Request expired in queue');
+      }
       for (let i = 0; i < 3; i++) {
         try { return await attempt(); }
         catch (e) { if (i === 2) throw e; }

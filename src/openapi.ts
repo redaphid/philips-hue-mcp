@@ -1,6 +1,6 @@
 import { Router, json } from 'express';
 import type { Request, Response } from 'express';
-import { HueClient } from './hue-client.js';
+import { HueClient } from './hue-client.ts';
 import { colord, extend } from 'colord';
 import names from 'colord/plugins/names';
 import https from 'node:https';

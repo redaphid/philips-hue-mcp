@@ -3,11 +3,9 @@
   "version": "1.1.0",
   "description": "MCP server for controlling Philips Hue lights",
   "type": "module",
-  "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
-    "start": "tsx src/index.ts",
-    "dev": "tsx watch src/index.ts"
+    "start": "node src/index.ts",
+    "start:stdio": "node src/index.ts --stdio"
   },
   "keywords": [
     "mcp",
@@ -26,8 +24,5 @@
     "swagger-ui-dist": "^5.31.0",
     "typescript": "^5.9.3",
     "zod": "^4.3.5"
-  },
-  "devDependencies": {
-    "tsx": "^4.21.0"
   }
 }
