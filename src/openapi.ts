@@ -7,14 +7,24 @@ import https from 'node:https';
 
 extend([names as unknown as Parameters<typeof extend>[0][number]]);
 
-function parseColor(color: string): { hue: number; sat: number; bri: number } | null {
+const gamma = (v: number): number => {
+  const n = v / 255;
+  return n > 0.04045 ? Math.pow((n + 0.055) / 1.055, 2.4) : n / 12.92;
+};
+
+function parseColor(color: string): { xy: [number, number]; bri: number } | null {
   const c = colord(color);
   if (!c.isValid()) return null;
-  const hsl = c.toHsl();
+  const { r, g, b } = c.toRgb();
+  const bri = Math.max(1, Math.round((Math.max(r, g, b) / 255) * c.alpha() * 254));
+  const R = gamma(r), G = gamma(g), B = gamma(b);
+  const X = R * 0.664511 + G * 0.154324 + B * 0.162028;
+  const Y = R * 0.283881 + G * 0.668433 + B * 0.047685;
+  const Z = R * 0.000088 + G * 0.072310 + B * 0.986039;
+  const sum = X + Y + Z;
   return {
-    hue: Math.round((hsl.h / 360) * 65535),
-    sat: Math.round((hsl.s / 100) * 254),
-    bri: Math.max(1, Math.round(c.alpha() * 254)),
+    xy: [sum === 0 ? 0.3127 : X / sum, sum === 0 ? 0.3290 : Y / sum],
+    bri,
   };
 }
 

@@ -19,16 +19,34 @@ const toHue = (v?: number) => v != null ? Math.round(v * 65535) : undefined;
 const toSat = (v?: number) => v != null ? Math.round(v * 254) : undefined;
 const toBri = (v?: number) => v != null ? Math.round(v * 253) + 1 : undefined;
 
-// Parse any CSS color string and convert to Hue bridge native format
+// sRGB gamma correction → linear
+const gamma = (v: number): number => {
+  const n = v / 255;
+  return n > 0.04045 ? Math.pow((n + 0.055) / 1.055, 2.4) : n / 12.92;
+};
+
+// Parse any CSS color string and convert to Hue bridge CIE xy + brightness
+// Uses XY color space for accurate color reproduction (HS mode distorts blues)
 // Alpha channel controls brightness: rgba(255,0,0,0.5) = red at 50% brightness
-function parseColor(color: string): { hue: number; sat: number; bri: number } | null {
+function parseColor(color: string): { xy: [number, number]; bri: number } | null {
   const c = colord(color);
   if (!c.isValid()) return null;
-  const hsl = c.toHsl();
+  const { r, g, b } = c.toRgb();
+
+  // Brightness from max RGB channel, dimmed by alpha
+  const bri = Math.max(1, Math.round((Math.max(r, g, b) / 255) * c.alpha() * 254));
+
+  // Linear RGB → CIE XYZ (Wide RGB D65 conversion matrix)
+  const R = gamma(r), G = gamma(g), B = gamma(b);
+  const X = R * 0.664511 + G * 0.154324 + B * 0.162028;
+  const Y = R * 0.283881 + G * 0.668433 + B * 0.047685;
+  const Z = R * 0.000088 + G * 0.072310 + B * 0.986039;
+
+  // CIE XYZ → xy chromaticity (D65 white point fallback for black)
+  const sum = X + Y + Z;
   return {
-    hue: Math.round((hsl.h / 360) * 65535),
-    sat: Math.round((hsl.s / 100) * 254),
-    bri: Math.max(1, Math.round(c.alpha() * 254)),
+    xy: [sum === 0 ? 0.3127 : X / sum, sum === 0 ? 0.3290 : Y / sum],
+    bri,
   };
 }
 
