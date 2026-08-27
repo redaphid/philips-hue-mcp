@@ -1,0 +1,31 @@
+name: CI
+
+# The repo previously had no pull-request CI at all: docker-publish.yml only
+# fires on `v*` tags and manual dispatch, so every PR sat with zero checks.
+# A PR that reports nothing is indistinguishable from a PR that passed.
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # tsconfig.json sets noEmit, so this is a pure type check over src/**.
+      - name: Typecheck
+        run: npx tsc --noEmit
