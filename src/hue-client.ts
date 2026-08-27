@@ -29,6 +29,21 @@ export interface HueScene {
   type: string;
 }
 
+// The Hue v1 bridge reports failures as HTTP 200 with a body of
+// [{ "error": { type, address, description } }]. Nothing here used to inspect
+// that, so a rejected command was indistinguishable from a working one: the
+// caller reported success and the light never moved. Unreachable lights are
+// NOT affected - the bridge answers those with a normal success entry.
+function throwOnBridgeError<T>(body: T): T {
+  if (Array.isArray(body)) {
+    const errors = body
+      .filter((entry) => entry?.error)
+      .map((entry) => entry.error.description || `${entry.error.address}: error type ${entry.error.type}`);
+    if (errors.length) throw new Error(`Hue bridge rejected the request: ${errors.join('; ')}`);
+  }
+  return body;
+}
+
 export class HueClient {
   private baseUrl: string;
   private pending: Promise<unknown> = Promise.resolve();
@@ -70,8 +85,12 @@ export class HueClient {
         throw new Error('Request expired in queue');
       }
       for (let i = 0; i < 3; i++) {
-        try { return await attempt(); }
-        catch (e) { if (i === 2) throw e; }
+        let result;
+        // Only transport failures are worth retrying. A bridge-level rejection
+        // is deterministic, so it is thrown immediately rather than retried.
+        try { result = await attempt(); }
+        catch (e) { if (i === 2) throw e; continue; }
+        return throwOnBridgeError(result);
       }
     };
 
