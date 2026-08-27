@@ -25,11 +25,20 @@ const gamma = (v: number): number => {
   return n > 0.04045 ? Math.pow((n + 0.055) / 1.055, 2.4) : n / 12.92;
 };
 
+// Common colour words that are NOT in the CSS named-colour list.
+// colord's `names` plugin implements only the 148 official CSS keywords, but
+// every tool description here promises "any CSS color format", so words people
+// actually reach for get rejected by a tool that claims to accept them.
+// Keep this list short and unambiguous - one accepted spelling per colour.
+const COLOR_ALIASES: Record<string, string> = {
+  amber: '#ffbf00',
+};
+
 // Parse any CSS color string and convert to Hue bridge CIE xy + brightness
 // Uses XY color space for accurate color reproduction (HS mode distorts blues)
 // Alpha channel controls brightness: rgba(255,0,0,0.5) = red at 50% brightness
 function parseColor(color: string): { xy: [number, number]; bri: number } | null {
-  const c = colord(color);
+  const c = colord(COLOR_ALIASES[color.trim().toLowerCase()] ?? color);
   if (!c.isValid()) return null;
   const { r, g, b } = c.toRgb();
 

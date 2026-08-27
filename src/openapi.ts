@@ -12,8 +12,13 @@ const gamma = (v: number): number => {
   return n > 0.04045 ? Math.pow((n + 0.055) / 1.055, 2.4) : n / 12.92;
 };
 
+// Common colour words that are NOT in the CSS named-colour list. See index.ts.
+const COLOR_ALIASES: Record<string, string> = {
+  amber: '#ffbf00',
+};
+
 function parseColor(color: string): { xy: [number, number]; bri: number } | null {
-  const c = colord(color);
+  const c = colord(COLOR_ALIASES[color.trim().toLowerCase()] ?? color);
   if (!c.isValid()) return null;
   const { r, g, b } = c.toRgb();
   const bri = Math.max(1, Math.round((Math.max(r, g, b) / 255) * c.alpha() * 254));
